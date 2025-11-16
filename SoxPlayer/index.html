@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Sox Audio Player</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <link rel="stylesheet" type="text/css" media="screen" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Sox Audio Player</h1>
+            <div class="status-bar">
+                <span id="wifi-status">WiFi: Unknown</span>
+                <span id="time-display"></span>
+            </div>
+        </header>
+
+        <!-- Now Playing Section -->
+        <section class="now-playing">
+            <div class="album-art">
+                <div id="album-placeholder">♪</div>
+            </div>
+            <div class="track-info">
+                <h2 id="track-title">No Track Selected</h2>
+                <p id="track-artist">Unknown Artist</p>
+                <p id="track-album">Unknown Album</p>
+            </div>
+        </section>
+
+        <!-- Progress Bar -->
+        <section class="progress-section">
+            <div class="time-display">
+                <span id="current-time">0:00</span>
+                <span id="total-time">0:00</span>
+            </div>
+            <div class="progress-bar" id="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+        </section>
+
+        <!-- Playback Controls -->
+        <section class="controls">
+            <button class="control-btn" id="prev-btn" title="Previous">⏮</button>
+            <button class="control-btn large" id="play-btn" title="Play">▶</button>
+            <button class="control-btn" id="next-btn" title="Next">⏭</button>
+            <button class="control-btn" id="stop-btn" title="Stop">⏹</button>
+        </section>
+
+        <!-- Volume Control -->
+        <section class="volume-section">
+            <label>Volume:</label>
+            <div class="slider-container">
+                <button class="vol-btn" id="vol-down">-</button>
+                <div class="volume-bar" id="volume-bar">
+                    <div class="volume-fill" id="volume-fill"></div>
+                </div>
+                <button class="vol-btn" id="vol-up">+</button>
+                <span id="volume-value">80%</span>
+            </div>
+        </section>
+
+        <!-- Effects Section -->
+        <section class="effects-section">
+            <h3>Audio Effects</h3>
+            <div class="effect-controls">
+                <div class="effect-row">
+                    <label>Speed:</label>
+                    <button class="effect-btn" data-speed="0.75">0.75x</button>
+                    <button class="effect-btn active" data-speed="1.0">1.0x</button>
+                    <button class="effect-btn" data-speed="1.25">1.25x</button>
+                    <button class="effect-btn" data-speed="1.5">1.5x</button>
+                </div>
+                <div class="effect-row">
+                    <label>Pitch:</label>
+                    <button class="effect-btn" data-pitch="-200">-200</button>
+                    <button class="effect-btn" data-pitch="-100">-100</button>
+                    <button class="effect-btn active" data-pitch="0">0</button>
+                    <button class="effect-btn" data-pitch="100">+100</button>
+                    <button class="effect-btn" data-pitch="200">+200</button>
+                </div>
+                <div class="effect-row">
+                    <label>Effects:</label>
+                    <button class="toggle-btn" id="reverb-btn">Reverb</button>
+                    <button class="toggle-btn" id="echo-btn">Echo</button>
+                    <button class="toggle-btn" id="bass-btn">Bass Boost</button>
+                    <button class="toggle-btn" id="treble-btn">Treble Boost</button>
+                </div>
+                <div class="effect-row">
+                    <button class="action-btn" id="reset-effects">Reset Effects</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Playlist Section -->
+        <section class="playlist-section">
+            <h3>Playlist <button class="action-btn small" id="refresh-btn">Refresh</button></h3>
+            <div class="playlist-controls">
+                <button class="action-btn" id="shuffle-btn">Shuffle</button>
+                <button class="action-btn" id="clear-btn">Clear</button>
+                <span id="playlist-count">0 tracks</span>
+            </div>
+            <div class="playlist" id="playlist">
+                <div class="playlist-item loading">Loading music files...</div>
+            </div>
+        </section>
+
+        <!-- Footer Actions -->
+        <footer class="footer">
+            <button class="action-btn" id="format-btn">Convert Format</button>
+            <button class="action-btn" id="reload-btn">Reload</button>
+            <button class="action-btn" id="settings-btn">Settings</button>
+        </footer>
+    </div>
+
+    <!-- Format Conversion Modal -->
+    <div class="modal" id="format-modal">
+        <div class="modal-content">
+            <h3>Convert Audio Format</h3>
+            <p>Convert selected track to:</p>
+            <div class="format-options">
+                <button class="format-btn" data-format="mp3">MP3</button>
+                <button class="format-btn" data-format="wav">WAV</button>
+                <button class="format-btn" data-format="flac">FLAC</button>
+                <button class="format-btn" data-format="ogg">OGG</button>
+            </div>
+            <button class="action-btn" id="close-modal">Close</button>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <h3>Settings</h3>
+            <div class="settings-options">
+                <label><input type="checkbox" id="auto-next"> Auto-play next track</label>
+                <label><input type="checkbox" id="repeat-mode"> Repeat playlist</label>
+                <label><input type="checkbox" id="show-logs"> Show debug logs</label>
+            </div>
+            <div class="path-config">
+                <p><strong>Music Path:</strong> /mnt/us/music/</p>
+                <p><strong>Sox Path:</strong> /mnt/us/sox/</p>
+            </div>
+            <button class="action-btn" id="close-settings">Close</button>
+        </div>
+    </div>
+
+    <!-- Debug Console -->
+    <div class="debug-console" id="debug-console">
+        <h4>Debug Log</h4>
+        <div id="debug-output"></div>
+        <button class="action-btn small" id="clear-log">Clear</button>
+    </div>
+
+    <!-- Load polyfill and mesquito SDK -->
+    <script src="/var/local/mesquite/SoxPlayer/polyfill.min.js"></script>
+    <script src="/var/local/mesquite/SoxPlayer/mesquito-sdk.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
