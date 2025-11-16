@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Sox Player - Minimal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            text-align: center;
+        }
+
+        button {
+            padding: 20px 40px;
+            font-size: 24px;
+            margin: 10px;
+            border: 2px solid #000;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        button:active {
+            background: #ddd;
+        }
+
+        #status {
+            margin: 20px 0;
+            padding: 10px;
+            background: #f0f0f0;
+            border: 1px solid #999;
+        }
+
+        #tracks {
+            margin: 20px 0;
+            text-align: left;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .track {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+        }
+
+        .track:hover {
+            background: #eee;
+        }
+
+        .track.selected {
+            background: #000;
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sox Player</h1>
+
+    <div id="status">No track selected</div>
+
+    <button onclick="play()">▶ PLAY</button>
+    <button onclick="stop()">⏹ STOP</button>
+
+    <div id="tracks"></div>
+
+    <script src="polyfill.min.js"></script>
+    <script src="mesquito-sdk.js"></script>
+    <script>
+        // Global state
+        var selectedTrack = null;
+        var tracks = [];
+
+        // Play button clicked
+        function play() {
+            if (!selectedTrack) {
+                alert('Please select a track first');
+                return;
+            }
+
+            // Write to localStorage
+            localStorage.setItem('track', selectedTrack);
+            localStorage.setItem('cmd', 'play');
+
+            document.getElementById('status').textContent = 'Playing: ' + selectedTrack.split('/').pop();
+        }
+
+        // Stop button clicked
+        function stop() {
+            // Write to localStorage
+            localStorage.setItem('cmd', 'stop');
+
+            document.getElementById('status').textContent = 'Stopped';
+        }
+
+        // Track clicked
+        function selectTrack(trackPath) {
+            selectedTrack = trackPath;
+
+            // Update UI
+            var trackDivs = document.querySelectorAll('.track');
+            for (var i = 0; i < trackDivs.length; i++) {
+                trackDivs[i].className = 'track';
+            }
+            event.target.className = 'track selected';
+
+            document.getElementById('status').textContent = 'Selected: ' + trackPath.split('/').pop();
+        }
+
+        // Load music files
+        function loadTracks() {
+            if (typeof getDirectory !== 'function') {
+                // Running in browser, not on Kindle
+                showDemoTracks();
+                return;
+            }
+
+            getDirectory('file:///mnt/us/music/').then(function(files) {
+                tracks = files;
+                showTracks(files);
+            }).catch(function(err) {
+                showDemoTracks();
+            });
+        }
+
+        // Show actual tracks
+        function showTracks(files) {
+            var container = document.getElementById('tracks');
+            container.innerHTML = '';
+
+            for (var i = 0; i < files.length; i++) {
+                var ext = files[i].name.split('.').pop().toLowerCase();
+
+                // Only show audio files
+                if (ext === 'mp3' || ext === 'wav' || ext === 'flac' || ext === 'ogg') {
+                    var div = document.createElement('div');
+                    div.className = 'track';
+                    div.textContent = files[i].name;
+                    div.onclick = (function(path) {
+                        return function() { selectTrack(path); };
+                    })(files[i].path);
+                    container.appendChild(div);
+                }
+            }
+
+            if (container.childNodes.length === 0) {
+                container.innerHTML = '<div class="track">No music files found in /mnt/us/music/</div>';
+            }
+        }
+
+        // Show demo tracks (for testing in browser)
+        function showDemoTracks() {
+            var container = document.getElementById('tracks');
+            container.innerHTML = '';
+
+            var demo = [
+                '/mnt/us/music/song1.mp3',
+                '/mnt/us/music/song2.mp3',
+                '/mnt/us/music/song3.mp3'
+            ];
+
+            for (var i = 0; i < demo.length; i++) {
+                var div = document.createElement('div');
+                div.className = 'track';
+                div.textContent = demo[i].split('/').pop();
+                div.onclick = (function(path) {
+                    return function() { selectTrack(path); };
+                })(demo[i]);
+                container.appendChild(div);
+            }
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            loadTracks();
+        };
+    </script>
+</body>
+</html>
