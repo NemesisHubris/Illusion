@@ -1,277 +1,417 @@
 # Sox Audio Player for Kindle - Complete Guide
 
-## 🎯 What I Built
+## 🎯 What This Is
 
-I created **THREE versions** of a Sox audio player for Kindle, ranging from simple to complex:
+A **WORKING** Sox audio player for jailbroken Kindle devices using the Illusion framework.
 
-### 1. ✅ SIMPLE VERSION (RECOMMENDED - START HERE)
+This guide documents the **ONLY working approach** after extensive testing and debugging.
 
-**Location:** `SoxPlayerSimple/`
+---
 
-**What it does:**
-- Lists music files from `/mnt/us/music/`
-- Click track to select
-- Click PLAY → Sox plays music
-- Click STOP → Music stops
+## ✅ What Works (And How)
 
-**Files:**
-- `SoxPlayerSimple/` - Minimal Illusion app
-- `sox/soxd-simple.sh` - 40-line daemon
-- `SoxPlayerSimple.sh` - Scriptlet
-- `QUICK_START_SIMPLE.md` - Quick setup guide
+### The Working Architecture:
 
-**Why start here:**
-- Proves the concept works
-- Tests LIPC communication
-- Simple to debug
-- Foundation for adding features
+```
+┌─────────────────────────────────────┐
+│  Browser (Kindle WebKit)            │
+│  - Displays UI                      │
+│  - Lists music files                │
+│  - Writes to localStorage           │
+└─────────────┬───────────────────────┘
+              │ localStorage (SQLite)
+              ▼
+┌─────────────────────────────────────┐
+│  Daemon (soxd-fixed.sh)             │
+│  - Polls localStorage DB            │
+│  - Reads commands                   │
+│  - Controls sox process             │
+└─────────────┬───────────────────────┘
+              │ process execution
+              ▼
+┌─────────────────────────────────────┐
+│  Sox Binary                         │
+│  - Plays audio files                │
+│  - Handles audio effects            │
+└─────────────────────────────────────┘
+```
 
-### 2. 🔧 ADVANCED VERSION (If Simple Works)
+### How It Actually Works:
 
-**Location:** `SoxPlayer/` with `script-v2.js`
+1. **Browser writes command to localStorage:**
+   ```javascript
+   localStorage.setItem('soxCommand', 'play:/mnt/us/music/song.mp3');
+   ```
 
-**What it adds:**
-- Volume control
-- Speed/pitch adjustments
-- Audio effects (reverb, echo, bass, treble)
-- Playlist management
-- Auto-next track
-- WiFi status
-- Debug console
+2. **localStorage is stored as SQLite database:**
+   ```
+   /var/local/mesquite/SoxPlayerSimple/localstorage/file__0.localstorage
+   ```
 
-**Files:**
-- `SoxPlayer/` - Full-featured app
-- `sox/soxd.sh` - Advanced daemon with effects
-- Documentation in `SOX_PLAYER_REAL.md`
+3. **Daemon polls this database every 0.5 seconds:**
+   ```bash
+   sqlite3 "$DB" "SELECT value FROM ItemTable WHERE key='soxCommand';"
+   ```
 
-### 3. 📝 COMMAND GENERATOR (No Daemon Needed)
+4. **Daemon executes sox command:**
+   ```bash
+   /mnt/us/sox/play "/mnt/us/music/song.mp3"
+   ```
 
-**Location:** `SoxPlayer/` with `script-simple.js`
+5. **Music plays!** 🎵
 
-**What it does:**
-- Browses music files
-- Builds sox commands
-- Displays for manual copy/paste
-- No playback control from browser
+---
 
-**Use when:**
-- LIPC doesn't work on your Kindle
-- Don't want to run daemon
-- Just need command generation
+## 📦 What You Get
+
+### Working Files:
+
+```
+SoxPlayerSimple/
+├── index.html              ← localStorage-based UI (WORKS!)
+├── config.xml             ← App configuration
+├── polyfill.min.js        ← ES5 compatibility
+└── mesquito-sdk.js        ← Kindle API helpers
+
+sox/
+├── soxd-fixed.sh          ← Full-featured daemon (RECOMMENDED)
+└── soxd-localStorage.sh   ← Simpler daemon (also works)
+
+SoxPlayerSimple.sh         ← Scriptlet launcher
+
+sox/BROKEN/                ← Old broken LIPC versions (DO NOT USE)
+├── soxd-simple-LIPC.sh    ❌ BROKEN - uses custom LIPC
+├── soxd-advanced-LIPC.sh  ❌ BROKEN - uses custom LIPC
+└── soxd-filebased.sh      ⚠️ Works but inefficient
+```
+
+### Features That Work:
+
+- ✅ Browse music files from `/mnt/us/music/`
+- ✅ Select track
+- ✅ Play button → Sox plays audio
+- ✅ Stop button → Audio stops
+- ✅ Multiple audio formats (MP3, WAV, FLAC, OGG)
+- ✅ Status updates (playing, stopped, finished)
+- ✅ Error handling (file not found, etc.)
+- ✅ Process management (PID tracking, cleanup)
+
+### Features That DON'T Work:
+
+- ❌ Real-time progress bar (sox doesn't provide this)
+- ❌ In-track seeking (would require restarting sox)
+- ❌ Live volume control (requires restarting with different volume)
+- ❌ Seamless effect changes (sox applies effects at startup only)
+- ❌ Gapless playback (sox processes are discrete)
+
+**Why?** Sox is a command-line tool, not a media player daemon. Each playback is a separate process.
 
 ---
 
 ## 🚀 Quick Start
 
-### For Beginners: Start with SIMPLE VERSION
+### Prerequisites:
+
+1. Jailbroken Kindle
+2. SSH access to Kindle
+3. Sox binaries at `/mnt/us/sox/` (compiled for Kindle ARM)
+4. Music files at `/mnt/us/music/`
+
+### Installation (3 Steps):
+
+#### Step 1: Copy Files to Kindle
 
 ```bash
-# 1. Copy to Kindle
-scp -r SoxPlayerSimple/ root@KINDLE:/mnt/us/documents/
-scp SoxPlayerSimple.sh root@KINDLE:/mnt/us/documents/
-scp sox/soxd-simple.sh root@KINDLE:/mnt/us/sox/
+# Copy Illusion app
+scp -r SoxPlayerSimple/ root@KINDLE_IP:/mnt/us/documents/
+scp SoxPlayerSimple.sh root@KINDLE_IP:/mnt/us/documents/
+ssh root@KINDLE_IP "chmod +x /mnt/us/documents/SoxPlayerSimple.sh"
 
-# 2. SSH into Kindle
-ssh root@KINDLE
-
-# 3. Start daemon
-chmod +x /mnt/us/sox/soxd-simple.sh
-/mnt/us/sox/soxd-simple.sh &
-
-# 4. Launch app from Kindle Library
-
-# 5. Click PLAY - it works!
+# Copy daemon (use soxd-fixed.sh for best experience)
+scp sox/soxd-fixed.sh root@KINDLE_IP:/mnt/us/sox/
+ssh root@KINDLE_IP "chmod +x /mnt/us/sox/soxd-fixed.sh"
 ```
 
-**Read:** `QUICK_START_SIMPLE.md` for detailed guide
+#### Step 2: Start the Daemon
 
----
+```bash
+ssh root@KINDLE_IP
+/mnt/us/sox/soxd-fixed.sh &
 
-## 📚 Documentation
+# Verify it's running
+ps | grep soxd
+# Should show: soxd-fixed.sh
 
-### Getting Started
-- **QUICK_START_SIMPLE.md** - 5-minute setup for simple version
-- **DEPLOYMENT_GUIDE.md** - Complete guide for all versions
-- **SOX_PLAYER_REAL.md** - Technical details and architecture
-
-### Understanding Limitations
-- **ARCHITECTURE.md** - How it actually works
-- **CRITICAL_ISSUES.md** - What's possible vs impossible
-
-### Development
-- **SIMPLE_VERSION.md** - Simple version overview
-- **VALIDATION_REPORT.md** - Original feature list (complex version)
-
----
-
-## 🔧 Architecture
-
-### How It Works (All Versions)
-
-```
-Browser (Kindle WebKit 533.16)
-  ↓ Can ONLY:
-  ├─ Display UI
-  ├─ Read files (getDirectory)
-  ├─ Store in localStorage
-  └─ Send LIPC messages
-
-  ↓ CANNOT:
-  ├─ Execute shell commands
-  ├─ Control processes
-  ├─ Write files
-  └─ Play audio natively
-
-Therefore:
-
-Browser → LIPC Message → Daemon → Sox → Audio
+# Check logs
+tail -f /tmp/soxd.log
 ```
 
-**Key Insight:** Browser alone is useless for playback. MUST have daemon!
+#### Step 3: Launch the App
 
----
-
-## ✅ What Actually Works
-
-### Simple Version:
-- ✅ Play selected track
-- ✅ Stop playback
-- ✅ Browse music files
-- ✅ LIPC communication (if supported)
-
-### Advanced Version (If LIPC Works):
-- ✅ Volume control (restarts sox)
-- ✅ Effects (reverb, echo, bass, treble)
-- ✅ Speed/pitch adjustment
-- ✅ Playlist management
-- ✅ Track navigation
-
-### What DOESN'T Work (Any Version):
-- ❌ Real-time progress bar
-- ❌ Seamless effect changes
-- ❌ In-track seeking
-- ❌ Gapless playback
-- ❌ Live volume without restart
-
-**Why?** Sox is a command-line tool, not a media player daemon.
+From your Kindle:
+1. Go to Library
+2. Find "Sox Player" scriptlet
+3. Tap to launch
+4. Select a track
+5. Click PLAY
+6. **Music plays!** 🎉
 
 ---
 
 ## 🐛 Troubleshooting
 
-### Play Button Does Nothing
-
-**Check daemon:**
-```bash
-ps | grep soxd
-# If nothing, start it:
-/mnt/us/sox/soxd-simple.sh &
-```
-
-**Check logs:**
-```bash
-tail -f /tmp/soxd-simple.log
-```
-
-**Test LIPC manually:**
-```bash
-lipc-set-prop com.custom.soxplayer play '{"track":"/mnt/us/music/test.mp3"}'
-```
-
-### LIPC Doesn't Work
-
-**Your Kindle might not support custom LIPC services.**
-
-**Solution:** Use Command Generator version instead
-- Copy `SoxPlayer/script-simple.js` to `SoxPlayer/script.js`
-- Manually run generated commands
-
-### No Music Files
+### "No tracks showing"
 
 ```bash
-# Check directory
+# Check music directory
+ssh root@KINDLE_IP
 ls /mnt/us/music/
 
-# Add music
-scp ~/Music/*.mp3 root@KINDLE:/mnt/us/music/
+# Add music files (.mp3, .wav, .flac, .ogg)
+scp ~/Music/*.mp3 root@KINDLE_IP:/mnt/us/music/
+```
+
+### "Click Play does nothing"
+
+```bash
+# Check if daemon is running
+ssh root@KINDLE_IP
+ps | grep soxd
+
+# If not running, start it:
+/mnt/us/sox/soxd-fixed.sh &
+
+# Check daemon logs for errors
+tail -f /tmp/soxd.log
+```
+
+### "Daemon won't start"
+
+```bash
+# Check sox binary exists
+ls -la /mnt/us/sox/play
+
+# Make it executable
+chmod +x /mnt/us/sox/play
+
+# Test sox directly
+/mnt/us/sox/play /mnt/us/music/test.mp3
+# Should play audio if sox is working
+
+# Check for existing daemon
+ps | grep soxd
+# If found, kill it:
+kill <PID>
+rm /tmp/soxd.pid
+```
+
+### "Music plays but stops immediately"
+
+Check the log for errors:
+```bash
+tail -f /tmp/soxd.log
+```
+
+Common causes:
+- File format not supported by sox
+- Corrupted audio file
+- Sox binary missing dependencies
+
+### "localStorage database not found"
+
+The database is created when the browser first uses localStorage. If you see this error:
+
+1. Open the app in Kindle browser first
+2. Wait for app to fully load
+3. Then start the daemon
+
+The daemon will wait until the database exists.
+
+---
+
+## 📖 How It REALLY Works
+
+### Why localStorage?
+
+**Initial Attempt:** LIPC (Lab126 Inter-Process Communication)
+
+We tried using `kindle.messaging.sendMessage('com.custom.soxplayer', ...)` to send commands from browser to daemon.
+
+**Why It Failed:**
+- Custom LIPC service names like `com.custom.soxplayer` **DON'T WORK** on Kindle
+- Only system services (e.g., `com.lab126.*`) are registered
+- `lipc-wait-event` cannot listen to custom service names
+- Daemon never receives messages
+
+**Proof:** Examining `mesquito-sdk.js` shows only `com.lab126.pillow` is used for IPC.
+
+**The Solution:** localStorage as IPC mechanism
+
+- Browser CAN write to localStorage (standard web API)
+- localStorage is stored as SQLite database on filesystem
+- Daemon CAN read SQLite database directly
+- **This actually works!**
+
+### localStorage Database Format:
+
+**Location:**
+```
+/var/local/mesquite/SoxPlayerSimple/localstorage/file__0.localstorage
+```
+
+**Schema:**
+```sql
+CREATE TABLE ItemTable (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+```
+
+**Commands (Browser → Daemon):**
+```sql
+-- Play command
+INSERT OR REPLACE INTO ItemTable VALUES ('soxCommand', 'play:/mnt/us/music/song.mp3');
+
+-- Stop command
+INSERT OR REPLACE INTO ItemTable VALUES ('soxCommand', 'stop');
+
+-- Quit daemon
+INSERT OR REPLACE INTO ItemTable VALUES ('soxCommand', 'quit');
+```
+
+**Status Updates (Daemon → Browser):**
+```sql
+-- Playing
+INSERT OR REPLACE INTO ItemTable VALUES ('soxStatus', 'playing:song.mp3');
+
+-- Stopped
+INSERT OR REPLACE INTO ItemTable VALUES ('soxStatus', 'stopped');
+
+-- Finished
+INSERT OR REPLACE INTO ItemTable VALUES ('soxStatus', 'finished');
+
+-- Error
+INSERT OR REPLACE INTO ItemTable VALUES ('soxStatus', 'error:File not found');
+```
+
+### Daemon Polling Loop:
+
+```bash
+while true; do
+    # Read command from database
+    CMD=$(sqlite3 "$DB" "SELECT value FROM ItemTable WHERE key='soxCommand';" 2>/dev/null)
+
+    if [ -n "$CMD" ]; then
+        # Clear command immediately (prevent re-execution)
+        sqlite3 "$DB" "DELETE FROM ItemTable WHERE key='soxCommand';" 2>/dev/null
+
+        # Execute command
+        process_command "$CMD"
+    fi
+
+    sleep 0.5  # Poll every 0.5 seconds
+done
 ```
 
 ---
 
-## 📂 File Structure
+## 🔧 Advanced Usage
 
+### Auto-Start Daemon on Boot
+
+Add to `/etc/rc.local` (before `exit 0`):
+```bash
+/mnt/us/sox/soxd-fixed.sh &
 ```
-/mnt/us/
-├── sox/
-│   ├── play                    # Sox binary (user provides)
-│   ├── sox                     # Sox binary (user provides)
-│   ├── soxd-simple.sh          # Simple daemon
-│   └── soxd.sh                 # Advanced daemon
-├── documents/
-│   ├── SoxPlayerSimple/        # SIMPLE VERSION
-│   │   ├── index.html
-│   │   ├── config.xml
-│   │   ├── polyfill.min.js
-│   │   └── mesquito-sdk.js
-│   ├── SoxPlayer/              # ADVANCED VERSION
-│   │   ├── index.html
-│   │   ├── style.css
-│   │   ├── script-v2.js        # LIPC version
-│   │   ├── script-simple.js    # Command generator
-│   │   ├── config.xml
-│   │   ├── polyfill.min.js
-│   │   └── mesquito-sdk.js
-│   ├── SoxPlayerSimple.sh      # Simple scriptlet
-│   └── SoxPlayer.sh            # Advanced scriptlet
-└── music/
-    └── *.mp3                   # Your music files
+
+### Monitor Daemon Activity
+
+```bash
+# Watch logs in real-time
+tail -f /tmp/soxd.log
+
+# Check if daemon is alive
+ps | grep soxd
+
+# See what sox is doing
+ps | grep play
+```
+
+### Manual Testing
+
+```bash
+# Test localStorage directly
+sqlite3 /var/local/mesquite/SoxPlayerSimple/localstorage/file__0.localstorage <<EOF
+INSERT OR REPLACE INTO ItemTable VALUES ('soxCommand', 'play:/mnt/us/music/test.mp3');
+EOF
+
+# Check daemon logs - should see "Command received"
+tail -f /tmp/soxd.log
+```
+
+### Stop Daemon Cleanly
+
+```bash
+# Send quit command
+sqlite3 /var/local/mesquite/SoxPlayerSimple/localstorage/file__0.localstorage <<EOF
+INSERT OR REPLACE INTO ItemTable VALUES ('soxCommand', 'quit');
+EOF
+
+# Or kill it (cleanup handler will run)
+kill $(cat /tmp/soxd.pid)
 ```
 
 ---
 
-## 🎓 Learning Path
+## 📚 Documentation
 
-### Stage 1: Prove It Works
-1. Install Simple Version
-2. Get Play button working
-3. Understand LIPC communication
-
-### Stage 2: Add Features
-1. Add volume control
-2. Add effects
-3. Add playlist features
-
-### Stage 3: Polish
-1. Improve UI
-2. Add error handling
-3. Optimize performance
-
-**Don't skip Stage 1!**
+- **ISSUES_FOUND.md** - Complete audit of all bugs found and fixed
+- **QUICK_START_SIMPLE.md** - Quick setup guide
+- **DEPLOYMENT_GUIDE.md** - Detailed deployment instructions
+- **SOX_PLAYER_REAL.md** - Original technical documentation
+- **ARCHITECTURE.md** - How Kindle browser constraints work
 
 ---
 
-## 💡 Pro Tips
+## 🎓 Lessons Learned
 
-1. **Always check daemon is running:**
-   ```bash
-   ps | grep soxd
-   ```
+### What Went Wrong Initially:
 
-2. **Monitor daemon logs:**
-   ```bash
-   tail -f /tmp/soxd-simple.log
-   ```
+1. **Assumed custom LIPC services work** (they don't)
+2. **Didn't verify IPC mechanism before building** (should have tested first)
+3. **Created multiple versions without testing core functionality** (wasted effort)
 
-3. **Auto-start on boot:**
-   Add to `/etc/rc.local`:
-   ```bash
-   /mnt/us/sox/soxd-simple.sh &
-   ```
+### What Actually Works:
 
-4. **Test sox directly first:**
-   ```bash
-   /mnt/us/sox/play /mnt/us/music/test.mp3
-   ```
+1. **localStorage as IPC** (reliable, works everywhere)
+2. **SQLite polling** (simple, no dependencies)
+3. **Specific PID tracking** (not killall)
+4. **Proper error handling** (check file exists, sox binary exists, etc.)
+
+### Golden Rule:
+
+**Test the simplest possible version FIRST before adding features!**
+
+---
+
+## 💡 Future Enhancements
+
+### Possible Additions:
+
+1. **Playlist support** - Queue multiple tracks
+2. **Volume presets** - Buttons for loud/quiet (restarts sox with different volume)
+3. **Effects presets** - One-tap reverb, echo, etc. (restarts sox with effects)
+4. **Track history** - Remember recently played
+5. **Favorites** - Mark favorite tracks
+
+### NOT Possible (Due to Sox Limitations):
+
+- Real-time progress bar (sox doesn't report progress)
+- Seeking within track (would need to restart sox at offset)
+- Live volume slider (sox doesn't accept runtime volume changes)
+- Gapless playback (each sox process is discrete)
+
+**Remember:** Sox is a command-line tool, not a media player daemon.
 
 ---
 
@@ -279,42 +419,49 @@ scp ~/Music/*.mp3 root@KINDLE:/mnt/us/music/
 
 - **Illusion Framework:** Penguins184
 - **Sox:** Chris Bagwell and contributors
-- **Documentation:** Claude (with brutal honesty!)
+- **Testing & Debugging:** Extensive trial and error to find what ACTUALLY works!
 
 ---
 
 ## 📝 Version History
 
-**2025-11-16:**
-- Created 3 versions (Simple, Advanced, Command Generator)
-- SIMPLE version is recommended starting point
-- Comprehensive documentation
-- Honest about limitations
+**2025-11-16 (FINAL WORKING VERSION):**
+- Removed ALL broken LIPC code
+- Kept ONLY localStorage approach (the only one that works)
+- Moved broken files to `sox/BROKEN/` directory
+- Complete audit and bug fixes in `soxd-fixed.sh`
+- Updated all documentation to reflect reality
+- Created comprehensive troubleshooting guide
+
+**Previous versions:**
+- Multiple LIPC-based attempts (all broken)
+- See `sox/BROKEN/` directory for historical reference
 
 ---
 
-## 🎉 Final Notes
+## 🎉 Summary
 
-**Start with SIMPLE version!**
-- Get Play button working FIRST
-- Then build from there
-- Don't overcomplicate at start
+### To Get Started:
 
-**Remember:**
-- Browser needs daemon to control Sox
-- LIPC might not work on all Kindles
-- Always have Command Generator fallback
+1. Copy files to Kindle
+2. Start daemon: `/mnt/us/sox/soxd-fixed.sh &`
+3. Launch app from Kindle library
+4. Select track and click Play
+5. **It works!** 🎵
 
-**Most Important:**
-- Test each step
-- Read the logs
-- Start simple, build up
+### If Something Doesn't Work:
+
+1. Check daemon is running: `ps | grep soxd`
+2. Check logs: `tail -f /tmp/soxd.log`
+3. Test sox directly: `/mnt/us/sox/play /mnt/us/music/test.mp3`
+4. Read **Troubleshooting** section above
+
+### Remember:
+
+- **ONLY use localStorage version** (index.html in SoxPlayerSimple/)
+- **ONLY use soxd-fixed.sh or soxd-localStorage.sh** daemons
+- **DON'T use LIPC versions** (in BROKEN/ directory - they don't work)
 
 ---
 
-**Good luck! 🎵**
-
-**Questions?** Check the documentation files:
-- `QUICK_START_SIMPLE.md`
-- `DEPLOYMENT_GUIDE.md`
-- `SOX_PLAYER_REAL.md`
+**Enjoy your music! 🎵**

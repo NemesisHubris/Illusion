@@ -93,6 +93,7 @@
     <script src="mesquito-sdk.js"></script>
     <script>
         var musicPath = 'file:///mnt/us/music/';
+        var lipcService = 'com.custom.soxplayer';
         var tracks = [];
         var selectedTrack = null;
 
@@ -102,37 +103,14 @@
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
-        // Send command to daemon via localStorage
-        function sendCommand(cmd) {
-            try {
-                localStorage.setItem('soxCommand', cmd);
-                log('Command sent: ' + cmd);
-                return true;
-            } catch (e) {
-                log('ERROR: ' + e.message);
-                alert('Failed to send command: ' + e.message);
-                return false;
-            }
-        }
-
-        // Check playback status from daemon
-        function checkStatus() {
-            try {
-                var status = localStorage.getItem('soxStatus') || 'unknown';
-                return status;
-            } catch (e) {
-                return 'error';
-            }
-        }
-
         function loadTracks() {
             log('Loading tracks from ' + musicPath);
 
             if (typeof getDirectory !== 'function') {
                 log('getDirectory not available, using demo tracks');
                 showTracks([
-                    {name: 'Test Track 1.mp3', path: '/mnt/us/music/Test Track 1.mp3'},
-                    {name: 'Test Track 2.mp3', path: '/mnt/us/music/Test Track 2.mp3'}
+                    {name: 'Test Track 1.mp3'},
+                    {name: 'Test Track 2.mp3'}
                 ]);
                 return;
             }
@@ -164,7 +142,7 @@
                 return;
             }
 
-            for (var i = 0; i < files.length; i++) {
+            for (var i = 0; i < tracks.length; i++) {
                 var div = document.createElement('div');
                 div.className = 'track';
                 div.textContent = tracks[i].name;
@@ -197,48 +175,55 @@
                 return;
             }
 
-            // Use path if available, otherwise construct from name
-            var trackPath = selectedTrack.path || ('/mnt/us/music/' + selectedTrack.name);
+            var trackPath = '/mnt/us/music/' + selectedTrack.name;
 
-            log('Playing: ' + trackPath);
+            log('Sending play command for: ' + trackPath);
 
-            // Send command to daemon via localStorage
-            if (sendCommand('play:' + trackPath)) {
+            if (typeof kindle === 'undefined' || !kindle.messaging) {
+                log('ERROR: kindle.messaging not available!');
+                alert('Kindle messaging not available. Not running on Kindle?');
+                return;
+            }
+
+            try {
+                // Send LIPC message to daemon
+                kindle.messaging.sendMessage(
+                    lipcService,
+                    'play',
+                    {track: trackPath}
+                );
+
                 document.getElementById('status').textContent = 'Playing: ' + selectedTrack.name;
+                log('Command sent!');
+            } catch (e) {
+                log('ERROR: ' + e.message);
+                alert('Failed to send command: ' + e.message);
             }
         }
 
         function stopTrack() {
-            log('Stopping playback');
+            log('Sending stop command');
 
-            if (sendCommand('stop')) {
-                document.getElementById('status').textContent = 'Stopped';
+            if (typeof kindle === 'undefined' || !kindle.messaging) {
+                return;
             }
-        }
 
-        // Poll status periodically
-        function updateStatus() {
-            var status = checkStatus();
-            // Can display status if needed
+            try {
+                kindle.messaging.sendMessage(lipcService, 'stop', {});
+                document.getElementById('status').textContent = 'Stopped';
+                log('Stop command sent');
+            } catch (e) {
+                log('ERROR: ' + e.message);
+            }
         }
 
         // Initialize
         window.onload = function() {
-            log('Sox Player initialized (localStorage version)');
-            log('');
+            log('Sox Player initialized');
             log('IMPORTANT: Daemon must be running!');
-            log('Start with: /mnt/us/sox/soxd-localStorage.sh &');
-            log('');
-            log('How it works:');
-            log('1. Click Play');
-            log('2. Command saved to localStorage');
-            log('3. Daemon polls localStorage');
-            log('4. Daemon runs sox');
+            log('Start with: /mnt/us/sox/soxd-simple.sh &');
             log('');
             loadTracks();
-
-            // Update status every 2 seconds
-            setInterval(updateStatus, 2000);
         };
     </script>
 </body>

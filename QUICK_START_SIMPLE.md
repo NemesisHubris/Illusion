@@ -1,15 +1,15 @@
-# Sox Player - QUICK START (Simple Version)
+# Sox Player - QUICK START
 
 ## 🎯 Goal: Click Play → Music Plays
 
-This is the SIMPLEST working version. Just 3 steps!
+This is the WORKING version using localStorage for IPC. Just 3 steps!
 
 ---
 
 ## 📦 What You Need
 
 1. Jailbroken Kindle
-2. Sox binaries at `/mnt/us/sox/`
+2. Sox binaries at `/mnt/us/sox/play`
 3. Music files at `/mnt/us/music/`
 
 ---
@@ -19,9 +19,9 @@ This is the SIMPLEST working version. Just 3 steps!
 ### Step 1: Copy Files to Kindle
 
 ```bash
-# Copy Sox daemon
-scp sox/soxd-simple.sh root@KINDLE_IP:/mnt/us/sox/
-ssh root@KINDLE_IP "chmod +x /mnt/us/sox/soxd-simple.sh"
+# Copy Sox daemon (RECOMMENDED: use soxd-fixed.sh)
+scp sox/soxd-fixed.sh root@KINDLE_IP:/mnt/us/sox/
+ssh root@KINDLE_IP "chmod +x /mnt/us/sox/soxd-fixed.sh"
 
 # Copy Illusion app
 scp -r SoxPlayerSimple/ root@KINDLE_IP:/mnt/us/documents/
@@ -33,11 +33,14 @@ ssh root@KINDLE_IP "chmod +x /mnt/us/documents/SoxPlayerSimple.sh"
 
 ```bash
 ssh root@KINDLE_IP
-/mnt/us/sox/soxd-simple.sh &
+/mnt/us/sox/soxd-fixed.sh &
 
 # Verify it's running
 ps | grep soxd
-# Should show: soxd-simple.sh
+# Should show: soxd-fixed.sh
+
+# Monitor logs (optional)
+tail -f /tmp/soxd.log
 ```
 
 ### Step 3: Launch the App
@@ -76,10 +79,10 @@ ssh root@KINDLE_IP
 ps | grep soxd
 
 # If not running, start it:
-/mnt/us/sox/soxd-simple.sh &
+/mnt/us/sox/soxd-fixed.sh &
 
 # Check daemon log:
-tail -f /tmp/soxd-simple.log
+tail -f /tmp/soxd.log
 ```
 
 ### "Daemon not starting"
@@ -104,15 +107,15 @@ chmod +x /mnt/us/sox/play
 └──────┬───────┘
        │
        ▼
-┌─────────────────────────────────┐
-│ kindle.messaging.sendMessage()  │
-│ → com.custom.soxplayer          │
-└──────┬──────────────────────────┘
-       │ (LIPC)
+┌────────────────────────────┐
+│ localStorage.setItem()     │
+│ 'soxCommand' = 'play:...'  │
+└──────┬─────────────────────┘
+       │ (SQLite database)
        ▼
 ┌──────────────────────────┐
-│ soxd-simple.sh           │
-│ (lipc-wait-event)        │
+│ soxd-fixed.sh            │
+│ (polls localStorage DB)  │
 └──────┬───────────────────┘
        │
        ▼
@@ -124,6 +127,12 @@ chmod +x /mnt/us/sox/play
    🔊 AUDIO!
 ```
 
+**Key Insight:**
+- Browser writes to localStorage (SQLite database)
+- Daemon polls the database file every 0.5 seconds
+- Commands execute immediately
+- No LIPC required!
+
 ---
 
 ## ✅ What Works
@@ -132,16 +141,19 @@ chmod +x /mnt/us/sox/play
 - ✅ Select track
 - ✅ Play button → Sox plays
 - ✅ Stop button → Sox stops
+- ✅ Multiple formats (MP3, WAV, FLAC, OGG)
+- ✅ Error handling
+- ✅ Status updates
 
 ---
 
 ## 🔧 Next Steps (Optional)
 
-Once this basic version works, you can add:
+Once this basic version works, you can customize:
 
-1. **Volume control** - Restart sox with different volume
-2. **Effects** - Add reverb, echo, etc.
-3. **Next/Previous** - Playlist navigation
+1. **Add volume control** - Restart sox with different volume
+2. **Add effects** - Add reverb, echo, etc.
+3. **Add playlist** - Queue multiple tracks
 4. **Auto-next** - Play next track when done
 
 But first: **Make sure Play works!**
@@ -154,10 +166,10 @@ But first: **Make sure Play works!**
 /mnt/us/
 ├── sox/
 │   ├── play                # Sox binary (you provide)
-│   └── soxd-simple.sh      # Simple daemon (40 lines)
+│   └── soxd-fixed.sh      # localStorage daemon (WORKS!)
 ├── documents/
 │   ├── SoxPlayerSimple/    # Illusion app
-│   │   ├── index.html
+│   │   ├── index.html      # localStorage version (WORKS!)
 │   │   ├── config.xml
 │   │   ├── polyfill.min.js
 │   │   └── mesquito-sdk.js
@@ -173,18 +185,39 @@ But first: **Make sure Play works!**
 1. **Auto-start daemon on boot:**
    Add to `/etc/rc.local`:
    ```bash
-   /mnt/us/sox/soxd-simple.sh &
+   /mnt/us/sox/soxd-fixed.sh &
    ```
 
 2. **Monitor daemon:**
    ```bash
-   tail -f /tmp/soxd-simple.log
+   tail -f /tmp/soxd.log
    ```
 
-3. **Test LIPC directly:**
+3. **Test localStorage directly:**
    ```bash
-   lipc-set-prop com.custom.soxplayer play '{"track":"/mnt/us/music/test.mp3"}'
+   sqlite3 /var/local/mesquite/SoxPlayerSimple/localstorage/file__0.localstorage <<EOF
+   INSERT OR REPLACE INTO ItemTable VALUES ('soxCommand', 'play:/mnt/us/music/test.mp3');
+   EOF
    ```
+
+4. **Check localStorage database:**
+   ```bash
+   sqlite3 /var/local/mesquite/SoxPlayerSimple/localstorage/file__0.localstorage \
+       "SELECT * FROM ItemTable;"
+   ```
+
+---
+
+## ⚠️ Important Notes
+
+### DO USE:
+- ✅ `SoxPlayerSimple/index.html` (localStorage version)
+- ✅ `sox/soxd-fixed.sh` (recommended daemon)
+- ✅ `sox/soxd-localStorage.sh` (simpler daemon, also works)
+
+### DO NOT USE:
+- ❌ Files in `sox/BROKEN/` directory (old LIPC versions - don't work)
+- ❌ `SoxPlayerSimple/index-BROKEN-LIPC.html` (broken LIPC version)
 
 ---
 
@@ -192,9 +225,18 @@ But first: **Make sure Play works!**
 
 1. Tap a track → Highlight changes (✅ Works)
 2. Click PLAY → Music starts (✅ Works)
-3. Click STOP → Music stops (✅ Works)
+3. Check log → Shows "Command received: play" (✅ Works)
+4. Click STOP → Music stops (✅ Works)
 
 **That's it! Foundation complete!**
+
+---
+
+## 📚 More Information
+
+- **README_SOX_PLAYER.md** - Complete guide with troubleshooting
+- **ISSUES_FOUND.md** - All bugs found and fixed
+- **DEPLOYMENT_GUIDE.md** - Detailed deployment instructions
 
 ---
 
@@ -202,6 +244,7 @@ But first: **Make sure Play works!**
 - Add volume slider
 - Add effects
 - Add playlists
+- Add favorites
 - Etc.
 
-**But you have a WORKING base!**
+**But you have a WORKING base!** 🎵
