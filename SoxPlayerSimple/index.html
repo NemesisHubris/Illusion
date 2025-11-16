@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Sox Player</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        #playlist {
+            border: 2px solid #333;
+            background: #fff;
+            max-height: 400px;
+            overflow-y: auto;
+            margin: 20px 0;
+        }
+
+        .track {
+            padding: 15px;
+            border-bottom: 1px solid #ddd;
+            cursor: pointer;
+        }
+
+        .track:hover {
+            background: #eee;
+        }
+
+        .track.selected {
+            background: #333;
+            color: #fff;
+        }
+
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 15px 30px;
+            font-size: 18px;
+            margin: 5px;
+            border: 2px solid #333;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        button:active {
+            background: #ddd;
+        }
+
+        #status {
+            text-align: center;
+            padding: 10px;
+            background: #e0e0e0;
+            border: 1px solid #999;
+            margin: 10px 0;
+        }
+
+        #log {
+            background: #222;
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sox Player</h1>
+
+    <div id="status">No track selected</div>
+
+    <div class="controls">
+        <button id="play-btn" onclick="playTrack()">▶ PLAY</button>
+        <button id="stop-btn" onclick="stopTrack()">⏹ STOP</button>
+    </div>
+
+    <div id="playlist"></div>
+
+    <div id="log"></div>
+
+    <script src="polyfill.min.js"></script>
+    <script src="mesquito-sdk.js"></script>
+    <script>
+        var musicPath = 'file:///mnt/us/music/';
+        var lipcService = 'com.custom.soxplayer';
+        var tracks = [];
+        var selectedTrack = null;
+
+        function log(msg) {
+            var logDiv = document.getElementById('log');
+            logDiv.innerHTML += '[' + new Date().toLocaleTimeString() + '] ' + msg + '<br>';
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function loadTracks() {
+            log('Loading tracks from ' + musicPath);
+
+            if (typeof getDirectory !== 'function') {
+                log('getDirectory not available, using demo tracks');
+                showTracks([
+                    {name: 'Test Track 1.mp3'},
+                    {name: 'Test Track 2.mp3'}
+                ]);
+                return;
+            }
+
+            getDirectory(musicPath).then(function(files) {
+                log('Found ' + files.length + ' files');
+
+                var musicFiles = [];
+                for (var i = 0; i < files.length; i++) {
+                    var ext = files[i].name.split('.').pop().toLowerCase();
+                    if (ext === 'mp3' || ext === 'wav' || ext === 'flac' || ext === 'ogg') {
+                        musicFiles.push(files[i]);
+                    }
+                }
+
+                showTracks(musicFiles);
+            }).catch(function(err) {
+                log('ERROR: ' + err);
+            });
+        }
+
+        function showTracks(files) {
+            tracks = files;
+            var playlist = document.getElementById('playlist');
+            playlist.innerHTML = '';
+
+            if (tracks.length === 0) {
+                playlist.innerHTML = '<div class="track">No music files found</div>';
+                return;
+            }
+
+            for (var i = 0; i < tracks.length; i++) {
+                var div = document.createElement('div');
+                div.className = 'track';
+                div.textContent = tracks[i].name;
+                div.onclick = (function(idx) {
+                    return function() { selectTrack(idx); };
+                })(i);
+                playlist.appendChild(div);
+            }
+
+            log('Loaded ' + tracks.length + ' tracks');
+        }
+
+        function selectTrack(index) {
+            selectedTrack = tracks[index];
+
+            // Update UI
+            var trackDivs = document.querySelectorAll('.track');
+            for (var i = 0; i < trackDivs.length; i++) {
+                trackDivs[i].className = 'track';
+            }
+            trackDivs[index].className = 'track selected';
+
+            document.getElementById('status').textContent = 'Selected: ' + selectedTrack.name;
+            log('Selected: ' + selectedTrack.name);
+        }
+
+        function playTrack() {
+            if (!selectedTrack) {
+                alert('Please select a track first');
+                return;
+            }
+
+            var trackPath = '/mnt/us/music/' + selectedTrack.name;
+
+            log('Sending play command for: ' + trackPath);
+
+            if (typeof kindle === 'undefined' || !kindle.messaging) {
+                log('ERROR: kindle.messaging not available!');
+                alert('Kindle messaging not available. Not running on Kindle?');
+                return;
+            }
+
+            try {
+                // Send LIPC message to daemon
+                kindle.messaging.sendMessage(
+                    lipcService,
+                    'play',
+                    {track: trackPath}
+                );
+
+                document.getElementById('status').textContent = 'Playing: ' + selectedTrack.name;
+                log('Command sent!');
+            } catch (e) {
+                log('ERROR: ' + e.message);
+                alert('Failed to send command: ' + e.message);
+            }
+        }
+
+        function stopTrack() {
+            log('Sending stop command');
+
+            if (typeof kindle === 'undefined' || !kindle.messaging) {
+                return;
+            }
+
+            try {
+                kindle.messaging.sendMessage(lipcService, 'stop', {});
+                document.getElementById('status').textContent = 'Stopped';
+                log('Stop command sent');
+            } catch (e) {
+                log('ERROR: ' + e.message);
+            }
+        }
+
+        // Initialize
+        window.onload = function() {
+            log('Sox Player initialized');
+            log('IMPORTANT: Daemon must be running!');
+            log('Start with: /mnt/us/sox/soxd-simple.sh &');
+            log('');
+            loadTracks();
+        };
+    </script>
+</body>
+</html>

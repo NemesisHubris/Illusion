@@ -1,0 +1,39 @@
+<?xml version="1.0"?>
+<widget id="com.custom.soxplayer" version="1.0" viewmodes="application" xmlns="http://www.w3.org/ns/widgets"
+    xmlns:kindle="http://kindle.amazon.com/ns/widget-extensions">
+    <name xml:lang="en">Sox Player</name>
+    <description xml:lang="en">Simple Sox Audio Player for Kindle</description>
+
+    <content src="index.html" />
+
+    <kindle:permissions>
+        <kindle:permission name="local-port-access" />
+    </kindle:permissions>
+
+    <kindle:network>
+        <kindle:asset key="initialDNS" value="false" />
+        <kindle:asset key="enableCaching" value="false" />
+    </kindle:network>
+
+    <kindle:cookiejar>
+        <kindle:asset key="persistent" value="true" />
+    </kindle:cookiejar>
+
+    <feature name="http://kindle.amazon.com/apis" required="true">
+        <param name="appmgr" value="yes" />
+        <param name="messaging" value="yes" />
+        <param name="localprefs" value="yes" />
+    </feature>
+
+    <kindle:messaging>
+        <kindle:app name="com.lab126.pillow" value="yes" />
+    </kindle:messaging>
+
+    <kindle:resources>
+        <kindle:asset key="LocalStorageQuota" value="5242880" />
+    </kindle:resources>
+
+    <kindle:settings>
+        <kindle:setting name="internetRequired" value="no" />
+    </kindle:settings>
+</widget>
