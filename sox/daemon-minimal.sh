@@ -16,7 +16,7 @@ while true; do
     fi
 
     # Read command from localStorage
-    CMD=$(sqlite3 "$DB" "SELECT value FROM ItemTable WHERE key='cmd';" 2>/dev/null | head -1)
+    CMD=$(sqlite3 "$DB" "SELECT value FROM ItemTable WHERE key='soxCommand';" 2>/dev/null | head -1)
 
     if [ -z "$CMD" ]; then
         sleep 0.5
@@ -24,12 +24,16 @@ while true; do
     fi
 
     # Clear command immediately
-    sqlite3 "$DB" "DELETE FROM ItemTable WHERE key='cmd';" 2>/dev/null
+    sqlite3 "$DB" "DELETE FROM ItemTable WHERE key='soxCommand';" 2>/dev/null
+
+    # Parse command format: "play:/path/to/file" or "stop"
+    ACTION=$(echo "$CMD" | cut -d: -f1)
+    PARAM=$(echo "$CMD" | cut -d: -f2-)
 
     # Execute command
-    case "$CMD" in
+    case "$ACTION" in
         play)
-            TRACK=$(sqlite3 "$DB" "SELECT value FROM ItemTable WHERE key='track';" 2>/dev/null | head -1)
+            TRACK="$PARAM"
             if [ -n "$TRACK" ]; then
                 echo "[$(date)] Playing: $TRACK"
                 $SOX_DIR/play.sh "$TRACK"
